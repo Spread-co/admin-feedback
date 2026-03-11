@@ -23,7 +23,8 @@
       <div class="af-section-header">
         <h2 class="af-section-title">Reviews Inbox</h2>
         <div class="af-toolbar">
-          <select class="af-select af-select--sm" v-model="reviewStatusFilter" @change="loadReviews">
+          <select class="af-select af-select--sm" v-model="reviewStatusFilter" @change="reviewsPage = 0; loadReviews()">
+            <option value="">All</option>
             <option value="pending">Pending</option>
             <option value="accepted">Accepted</option>
             <option value="published">Published</option>
@@ -40,7 +41,7 @@
       </div>
 
       <div v-else-if="reviews.length === 0" class="af-empty">
-        No {{ reviewStatusFilter }} reviews.
+        No {{ reviewStatusFilter || 'matching' }} reviews.
       </div>
 
       <div v-else class="af-table-wrap">
@@ -56,7 +57,15 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="review in reviews" :key="review.id" class="af-row">
+            <tr
+              v-for="review in reviews"
+              :key="review.id"
+              class="af-row af-row--clickable"
+              @click="selectReview(review)"
+              tabindex="0"
+              @keydown.enter="selectReview(review)"
+              :aria-selected="selectedReview && selectedReview.id === review.id"
+            >
               <td class="af-cell-name">{{ review.member_name || '—' }}</td>
               <td>
                 <span class="af-tag">{{ review.category_name }}</span>
@@ -70,7 +79,7 @@
                 <span class="af-comment-text" :title="review.comment">{{ review.comment || '—' }}</span>
               </td>
               <td class="af-cell-date">{{ formatDate(review.created_at) }}</td>
-              <td class="af-cell-actions">
+              <td class="af-cell-actions" @click.stop>
                 <div class="af-action-group">
                   <button
                     v-if="review.status === 'pending'"
@@ -106,6 +115,67 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Pagination -->
+      <div v-if="reviews.length > 0 || reviewsPage > 0" class="af-pagination">
+        <button class="af-btn af-btn--ghost af-btn--sm" @click="prevReviewsPage" :disabled="reviewsPage === 0 || reviewsLoading">
+          ← Prev
+        </button>
+        <span class="af-pagination-label">Page {{ reviewsPage + 1 }}</span>
+        <button class="af-btn af-btn--ghost af-btn--sm" @click="nextReviewsPage" :disabled="reviews.length < reviewsPageSize || reviewsLoading">
+          Next →
+        </button>
+      </div>
+
+      <!-- Slide-in detail panel -->
+      <transition name="af-detail-slide">
+        <div v-if="selectedReview" class="af-detail-panel" role="dialog" aria-modal="false" :aria-label="`Review by ${selectedReview.member_name || 'member'}`">
+          <div class="af-detail-header">
+            <h3 class="af-detail-title">Review Detail</h3>
+            <button class="af-detail-close" @click="selectedReview = null" aria-label="Close detail panel">✕</button>
+          </div>
+          <div class="af-detail-body">
+            <div class="af-detail-stars">
+              <span v-for="n in 5" :key="n" :class="{ 'af-star-on': n <= selectedReview.rating }">★</span>
+            </div>
+            <div class="af-detail-meta">
+              <span class="af-detail-name">{{ selectedReview.member_name || 'Anonymous' }}</span>
+              <span class="af-detail-sep">·</span>
+              <span class="af-tag">{{ selectedReview.category_name }}</span>
+              <span class="af-detail-sep">·</span>
+              <span class="af-detail-date">{{ formatDate(selectedReview.created_at) }}</span>
+            </div>
+            <p class="af-detail-comment">{{ selectedReview.comment || '(No comment)' }}</p>
+            <div class="af-detail-status">
+              <span class="af-status-badge" :class="`af-status-badge--${selectedReview.status}`">
+                {{ selectedReview.status }}
+              </span>
+            </div>
+            <div class="af-detail-actions">
+              <button
+                v-if="selectedReview.status === 'pending'"
+                class="af-btn af-btn--accept"
+                @click="actionReview(selectedReview.id, 'accept').then(() => selectedReview = null)"
+                :disabled="actionLoadingId === selectedReview.id"
+              >Accept</button>
+              <button
+                v-if="selectedReview.status === 'accepted'"
+                class="af-btn af-btn--primary"
+                @click="actionReview(selectedReview.id, 'publish').then(() => selectedReview = null)"
+                :disabled="actionLoadingId === selectedReview.id"
+              >Publish</button>
+              <button
+                v-if="selectedReview.status !== 'rejected' && selectedReview.status !== 'published'"
+                class="af-btn af-btn--danger"
+                @click="actionReview(selectedReview.id, 'reject').then(() => selectedReview = null)"
+                :disabled="actionLoadingId === selectedReview.id"
+              >Reject</button>
+              <button class="af-btn af-btn--ghost" @click="selectedReview = null">Close</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+      <div v-if="selectedReview" class="af-detail-overlay" @click="selectedReview = null"></div>
     </section>
 
     <!-- ══════════════════════════════════════════════
@@ -291,9 +361,20 @@
       <div v-else-if="categories.length === 0" class="af-empty">
         No categories yet. Add your first category above.
       </div>
-      <ul v-else class="af-category-list">
-        <li v-for="cat in categories" :key="cat.id" class="af-category-row">
-          <span class="af-category-sort">{{ cat.sort_order }}</span>
+      <ul v-else class="af-category-list" role="list" aria-label="Drag to reorder categories">
+        <li
+          v-for="(cat, idx) in categories"
+          :key="cat.id"
+          class="af-category-row"
+          :class="{ 'af-category-row--dragging': dragIndex === idx, 'af-category-row--over': dragoverIndex === idx }"
+          draggable="true"
+          @dragstart="onCatDragStart(idx)"
+          @dragover.prevent="onCatDragOver(idx)"
+          @drop.prevent="onCatDrop(idx)"
+          @dragend="onCatDragEnd"
+          :aria-grabbed="dragIndex === idx"
+        >
+          <span class="af-category-drag-handle" aria-hidden="true" title="Drag to reorder">⠿</span>
           <div class="af-category-info">
             <span class="af-category-name">{{ cat.name }}</span>
             <span v-if="cat.description" class="af-category-desc">{{ cat.description }}</span>
@@ -416,12 +497,39 @@ export default {
     const reviewsLoading    = ref(false);
     const reviewStatusFilter = ref('pending');
     const pendingCount      = ref(0);
+    const reviewsPage       = ref(0);
+    const reviewsPageSize   = 25;
+    const selectedReview    = ref(null);
+
+    function selectReview(review) {
+      selectedReview.value = review;
+    }
+
+    function prevReviewsPage() {
+      if (reviewsPage.value > 0) { reviewsPage.value--; loadReviews(); }
+    }
+
+    function nextReviewsPage() {
+      reviewsPage.value++;
+      loadReviews();
+    }
 
     async function loadReviews() {
       reviewsLoading.value = true;
+      selectedReview.value = null;
       try {
-        const data = await client().rpc('get_pending_reviews', { p_status: reviewStatusFilter.value });
+        const params = { p_limit: reviewsPageSize, p_offset: reviewsPage.value * reviewsPageSize };
+        if (reviewStatusFilter.value) params.p_status = reviewStatusFilter.value;
+        const data = await client().rpc('get_pending_reviews', params);
         reviews.value = Array.isArray(data) ? data : [];
+        if (!reviewStatusFilter.value || reviewStatusFilter.value === 'pending') {
+          const pendingData = reviewStatusFilter.value === 'pending'
+            ? reviews.value
+            : await client().rpc('get_pending_reviews', { p_status: 'pending', p_limit: 1000 }).catch(() => []);
+          pendingCount.value = Array.isArray(pendingData) && reviewStatusFilter.value === 'pending'
+            ? reviews.value.length
+            : pendingCount.value;
+        }
         if (reviewStatusFilter.value === 'pending') pendingCount.value = reviews.value.length;
       } catch (err) {
         setError(err.message || 'Failed to load reviews.');
@@ -438,7 +546,10 @@ export default {
         await client().rpc(fn, { p_review_id: reviewId });
         reviews.value = reviews.value.filter(r => r.id !== reviewId);
         if (reviewStatusFilter.value === 'pending') pendingCount.value = Math.max(0, pendingCount.value - 1);
-        emit('trigger-event', { name: 'feedback:reviewActioned', event: { reviewId, action } });
+        const eventName = action === 'publish' ? 'feedback:reviewPublished'
+                        : action === 'accept'  ? 'feedback:reviewAccepted'
+                        : 'feedback:reviewRejected';
+        emit('trigger-event', { name: eventName, event: { reviewId } });
       } catch (err) {
         setError(err.message || `Failed to ${action} review.`);
       } finally {
@@ -481,7 +592,7 @@ export default {
         const newVal = !featureUpvoteEnabled.value;
         await client().rpc('toggle_feature_upvote_system', { p_enabled: newVal });
         featureUpvoteEnabled.value = newVal;
-        emit('trigger-event', { name: 'feedback:featureToggled', event: { enabled: newVal } });
+        emit('trigger-event', { name: 'feedback:toggleChanged', event: { enabled: newVal } });
       } catch (err) {
         setError(err.message || 'Failed to toggle system.');
       } finally {
@@ -534,6 +645,7 @@ export default {
         await client().rpc('deactivate_feature_request', { p_feature_id: featureId });
         const feat = features.value.find(f => f.id === featureId);
         if (feat) feat.is_active = false;
+        emit('trigger-event', { name: 'feedback:featureDeactivated', event: { featureId } });
       } catch (err) {
         setError(err.message || 'Failed to deactivate feature.');
       } finally {
@@ -588,14 +700,14 @@ export default {
             p_description: categoryForm.value.description.trim() || null,
             p_sort_order: categoryForm.value.sort_order ?? 0,
           });
-          emit('trigger-event', { name: 'feedback:categoryChanged', event: { action: 'update', id: editingCategoryId.value } });
+          emit('trigger-event', { name: 'feedback:categoryUpdated', event: { action: 'update', id: editingCategoryId.value } });
         } else {
           await client().rpc('create_review_category', {
             p_name: categoryForm.value.name.trim(),
             p_description: categoryForm.value.description.trim() || null,
             p_sort_order: categoryForm.value.sort_order ?? 0,
           });
-          emit('trigger-event', { name: 'feedback:categoryChanged', event: { action: 'create', id: '' } });
+          emit('trigger-event', { name: 'feedback:categoryUpdated', event: { action: 'create', id: '' } });
         }
         closeCategoryForm();
         await loadCategories();
@@ -612,7 +724,7 @@ export default {
       try {
         await client().rpc('delete_review_category', { p_category_id: categoryId });
         categories.value = categories.value.filter(c => c.id !== categoryId);
-        emit('trigger-event', { name: 'feedback:categoryChanged', event: { action: 'delete', id: categoryId } });
+        emit('trigger-event', { name: 'feedback:categoryUpdated', event: { action: 'delete', id: categoryId } });
       } catch (err) {
         setError(err.message || 'Failed to delete category.');
       } finally {
@@ -623,6 +735,49 @@ export default {
     function closeForms() {
       closeFeatureForm();
       closeCategoryForm();
+    }
+
+    // ── Category drag-to-sort ─────────────────────────────────────────────
+    const dragIndex     = ref(null);
+    const dragoverIndex = ref(null);
+
+    function onCatDragStart(idx) {
+      dragIndex.value = idx;
+    }
+
+    function onCatDragOver(idx) {
+      dragoverIndex.value = idx;
+    }
+
+    async function onCatDrop(toIdx) {
+      const fromIdx = dragIndex.value;
+      if (fromIdx === null || fromIdx === toIdx) return;
+      const items = [...categories.value];
+      const [moved] = items.splice(fromIdx, 1);
+      items.splice(toIdx, 0, moved);
+      // Reassign display_order in increments of 10
+      items.forEach((cat, i) => { cat.sort_order = i * 10; });
+      categories.value = items;
+      // Persist each changed item
+      try {
+        await Promise.all(items.map((cat, i) =>
+          client().rpc('update_review_category', {
+            p_category_id: cat.id,
+            p_name: cat.name,
+            p_description: cat.description || null,
+            p_sort_order: i * 10,
+          })
+        ));
+        emit('trigger-event', { name: 'feedback:categoryUpdated', event: { action: 'reorder', id: '' } });
+      } catch (err) {
+        setError(err.message || 'Failed to save category order.');
+        await loadCategories(); // reload to restore true state on error
+      }
+    }
+
+    function onCatDragEnd() {
+      dragIndex.value    = null;
+      dragoverIndex.value = null;
     }
 
     // ── Utility ───────────────────────────────────────────────────────────
@@ -669,7 +824,8 @@ export default {
       actionLoadingId,
       // reviews
       reviews, reviewsLoading, reviewStatusFilter, pendingCount,
-      loadReviews, actionReview,
+      reviewsPage, reviewsPageSize, selectedReview,
+      loadReviews, actionReview, selectReview, prevReviewsPage, nextReviewsPage,
       // features
       features, featuresLoading, featureUpvoteEnabled, toggleLoading,
       featureFormOpen, editingFeatureId, featureForm, featureFormLoading, featureFormError,
@@ -677,7 +833,9 @@ export default {
       // categories
       categories, categoriesLoading,
       categoryFormOpen, editingCategoryId, categoryForm, categoryFormLoading, categoryFormError,
+      dragIndex, dragoverIndex,
       loadCategories, openCategoryForm, closeCategoryForm, saveCategory, deleteCategory,
+      onCatDragStart, onCatDragOver, onCatDrop, onCatDragEnd,
       // utils
       switchSection, formatDate,
     };
@@ -936,6 +1094,8 @@ export default {
 
 .af-row:last-child td { border-bottom: none; }
 .af-row:hover { background: var(--af-bg); }
+.af-row--clickable { cursor: pointer; }
+.af-row--clickable:focus { outline: 2px solid var(--af-accent); outline-offset: -2px; }
 
 .af-col-num     { width: 80px; text-align: center; }
 .af-col-actions { width: 120px; }
@@ -1107,18 +1267,25 @@ export default {
   border-radius: var(--af-radius-md);
 }
 
-.af-category-sort {
-  width: 28px;
-  height: 28px;
-  background: var(--af-bg);
-  border-radius: var(--af-radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
+.af-category-drag-handle {
+  font-size: 18px;
+  line-height: 1;
   color: var(--af-text-secondary);
+  cursor: grab;
   flex-shrink: 0;
+  user-select: none;
+  padding: 2px 4px;
+}
+
+.af-category-drag-handle:active { cursor: grabbing; }
+
+.af-category-row--dragging {
+  opacity: 0.45;
+}
+
+.af-category-row--over {
+  border-color: var(--af-accent);
+  background: rgba(206, 102, 50, 0.06);
 }
 
 .af-category-info {
@@ -1202,6 +1369,183 @@ export default {
 @keyframes af-toast-in {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Pagination ────────────────────────────────────────────────────────── */
+.af-pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+
+.af-pagination-label {
+  font-size: 13px;
+  color: var(--af-text-secondary);
+  min-width: 60px;
+  text-align: center;
+}
+
+.af-btn--sm {
+  padding: 7px 14px;
+  font-size: 13px;
+}
+
+/* ── Detail panel ──────────────────────────────────────────────────────── */
+.af-detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 99;
+}
+
+.af-detail-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 400px;
+  max-width: 100vw;
+  height: 100%;
+  background: var(--af-surface);
+  box-shadow: -4px 0 28px rgba(0, 0, 0, 0.14);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.af-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--af-border);
+  position: sticky;
+  top: 0;
+  background: var(--af-surface);
+  z-index: 1;
+}
+
+.af-detail-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--af-primary);
+}
+
+.af-detail-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--af-text-secondary);
+  padding: 4px 8px;
+  border-radius: var(--af-radius-sm);
+  transition: background 0.12s ease;
+}
+
+.af-detail-close:hover { background: var(--af-bg); }
+
+.af-detail-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.af-detail-stars {
+  font-size: 24px;
+  letter-spacing: 2px;
+  color: var(--af-border);
+}
+
+.af-detail-stars .af-star-on { color: var(--af-accent); }
+
+.af-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.af-detail-name { font-weight: 700; color: var(--af-text); }
+.af-detail-sep  { color: var(--af-text-secondary); }
+.af-detail-date { font-size: 13px; color: var(--af-text-secondary); }
+
+.af-detail-comment {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--af-text);
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.af-detail-status { display: flex; }
+
+.af-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--af-border);
+}
+
+/* Detail panel btn variants */
+.af-btn--accept {
+  background: rgba(22, 163, 74, 0.1);
+  color: #16A34A;
+  border: 1.5px solid #16A34A;
+  padding: 9px 18px;
+  font-family: var(--af-font);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--af-radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.af-btn--accept:hover:not(:disabled) { background: rgba(22, 163, 74, 0.18); }
+.af-btn--accept:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.af-btn--danger {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--af-error);
+  border: 1.5px solid var(--af-error);
+  padding: 9px 18px;
+  font-family: var(--af-font);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--af-radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.af-btn--danger:hover:not(:disabled) { background: rgba(220, 38, 38, 0.14); }
+.af-btn--danger:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Vue transition for detail panel */
+.af-detail-slide-enter-active,
+.af-detail-slide-leave-active {
+  transition: transform 0.25s ease;
+}
+
+.af-detail-slide-enter-from,
+.af-detail-slide-leave-to {
+  transform: translateX(100%);
+}
+
+@media (max-width: 767px) {
+  .af-detail-panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 80vh;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 28px rgba(0, 0, 0, 0.14);
+  }
 }
 
 /* ── Responsive ────────────────────────────────────────────────────────── */

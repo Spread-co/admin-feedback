@@ -6,9 +6,14 @@ export default {
   },
   triggerEvents: [
     {
-      name: 'feedback:reviewActioned',
-      label: { en: 'On Review Actioned' },
-      event: { reviewId: '', action: 'accept' },
+      name: 'feedback:reviewPublished',
+      label: { en: 'On Review Published' },
+      event: { reviewId: '' },
+    },
+    {
+      name: 'feedback:reviewAccepted',
+      label: { en: 'On Review Accepted' },
+      event: { reviewId: '' },
     },
     {
       name: 'feedback:featureCreated',
@@ -16,12 +21,17 @@ export default {
       event: { title: '' },
     },
     {
-      name: 'feedback:featureToggled',
+      name: 'feedback:featureDeactivated',
+      label: { en: 'On Feature Deactivated' },
+      event: { featureId: '' },
+    },
+    {
+      name: 'feedback:toggleChanged',
       label: { en: 'On Feature Upvote System Toggled' },
       event: { enabled: true },
     },
     {
-      name: 'feedback:categoryChanged',
+      name: 'feedback:categoryUpdated',
       label: { en: 'On Category Changed' },
       event: { action: 'create', id: '' },
     },
