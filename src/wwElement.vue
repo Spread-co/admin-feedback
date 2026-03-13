@@ -1,5 +1,5 @@
 <template>
-  <div class="af-root">
+  <div v-if="!content.portalTarget || content.portalTarget === 'admin'" class="af-root">
 
     <!-- Section Nav -->
     <nav class="af-section-nav" role="navigation" aria-label="Feedback sections">
