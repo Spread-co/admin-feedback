@@ -1,5 +1,13 @@
 <template>
   <div v-if="!content.portalTarget || content.portalTarget === 'admin'" class="af-root">
+    <div v-if="permissionGranted !== true" class="spread-perm-overlay" style="position:absolute;inset:0;z-index:9999;background:var(--spread-cream,#FBFAF8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px;text-align:center;">
+      <div v-if="permissionGranted === null" style="width:24px;height:24px;border:3px solid rgba(0,0,0,0.1);border-top-color:var(--spread-accent,#CE6632);border-radius:50%;animation:spread-perm-spin 0.7s linear infinite;"></div>
+      <template v-else>
+        <span style="font-size:32px;line-height:1;">🔒</span>
+        <strong style="font-size:15px;font-weight:700;color:var(--spread-black,#141414);margin:0;">Access denied</strong>
+        <span style="font-size:13px;color:var(--spread-mid-grey,#6B7280);">You don't have permission to view this area.</span>
+      </template>
+    </div>
 
     <!-- Section Nav -->
     <nav class="af-section-nav" role="navigation" aria-label="Feedback sections">
@@ -453,6 +461,23 @@ export default {
   emits: ['trigger-event', 'update:content'],
 
   setup(props, { emit }) {
+    // has_role belt-and-suspenders permission guard
+    const permissionGranted = ref(null);
+    const _checkAdminPerm = async () => {
+      const t = props.content?.accessToken, u = props.content?.userId,
+            url = props.content?.supabaseUrl, k = props.content?.supabaseAnonKey;
+      if (!t || !u || !url || !k) { permissionGranted.value = false; return; }
+      try {
+        const r = await fetch(`${url}/rest/v1/rpc/has_role`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: k, Authorization: `Bearer ${t}` },
+          body: JSON.stringify({ p_user_id: u, p_role_key: 'admin' }),
+        });
+        permissionGranted.value = r.ok ? !!(await r.json()) : false;
+      } catch { permissionGranted.value = false; }
+    };
+    watch(() => props.content?.accessToken, t => t ? _checkAdminPerm() : (permissionGranted.value = false), { immediate: true });
+
     const supabaseUrl     = computed(() => props.content?.supabaseUrl || '');
     const supabaseAnonKey = computed(() => props.content?.supabaseAnonKey || '');
     const accessToken     = computed(() => props.content?.accessToken || '');
@@ -818,6 +843,7 @@ export default {
     /* wwEditor:end */
 
     return {
+      permissionGranted,
       ICONS,
       activeSection, sections,
       globalError,
@@ -871,6 +897,7 @@ export default {
   overflow: hidden;
   max-width: 1440px;
   margin-inline: auto;
+  position: relative;
 }
 
 /* ── Section nav ───────────────────────────────────────────────────────── */
@@ -1561,4 +1588,5 @@ export default {
   .af-section { padding: 20px 24px; }
   .af-section-header { gap: 12px; }
 }
+@keyframes spread-perm-spin { to { transform: rotate(360deg); } }
 </style>

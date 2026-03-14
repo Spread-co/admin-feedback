@@ -63,6 +63,13 @@ export default {
       hidden: true,
       defaultValue: '',
     },
+    userId: {
+      label: { en: 'User ID' },
+      type: 'Text',
+      bindable: true,
+      hidden: true,
+      defaultValue: '',
+    },
     refreshTrigger: {
       label: { en: 'Refresh Trigger' },
       type: 'Number',
