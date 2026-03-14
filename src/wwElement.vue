@@ -1588,5 +1588,18 @@ export default {
   .af-section { padding: 20px 24px; }
   .af-section-header { gap: 12px; }
 }
+@media (max-width: 479px) {
+  .af-root { padding: 8px; }
+  .af-section { padding: 10px; }
+}
+@media (min-width: 480px) {
+  .af-root { padding: 10px; }
+}
+@media (min-width: 1024px) {
+  .af-root { padding: 20px 28px; }
+}
+@media (min-width: 1280px) {
+  .af-root { padding: 24px 40px; }
+}
 @keyframes spread-perm-spin { to { transform: rotate(360deg); } }
 </style>
