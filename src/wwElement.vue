@@ -869,6 +869,8 @@ export default {
   min-height: 400px;
   border-radius: var(--af-radius-lg);
   overflow: hidden;
+  max-width: 1440px;
+  margin-inline: auto;
 }
 
 /* ── Section nav ───────────────────────────────────────────────────────── */
