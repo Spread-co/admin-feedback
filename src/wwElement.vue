@@ -468,12 +468,15 @@ export default {
             url = props.content?.supabaseUrl, k = props.content?.supabaseAnonKey;
       if (!t || !u || !url || !k) { permissionGranted.value = false; return; }
       try {
-        const r = await fetch(`${url}/rest/v1/rpc/has_role`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', apikey: k, Authorization: `Bearer ${t}` },
-          body: JSON.stringify({ p_user_id: u, p_role_key: 'admin' }),
-        });
-        permissionGranted.value = r.ok ? !!(await r.json()) : false;
+        const ALLOWED = ['founder', 'platform_admin'];
+        const results = await Promise.all(ALLOWED.map(role =>
+          fetch(`${url}/rest/v1/rpc/has_role`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: k, Authorization: `Bearer ${t}` },
+            body: JSON.stringify({ p_user_id: u, p_role_key: role }),
+          }).then(r => r.ok ? r.json() : false)
+        ));
+        permissionGranted.value = results.some(Boolean);
       } catch { permissionGranted.value = false; }
     };
     watch(() => props.content?.accessToken, t => t ? _checkAdminPerm() : (permissionGranted.value = false), { immediate: true });
