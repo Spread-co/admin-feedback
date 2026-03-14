@@ -1556,4 +1556,9 @@ export default {
   .af-section-header { flex-direction: column; align-items: flex-start; }
   .af-table th, .af-table td { padding: 8px 10px; }
 }
+
+@media (min-width: 768px) {
+  .af-section { padding: 20px 24px; }
+  .af-section-header { gap: 12px; }
+}
 </style>
