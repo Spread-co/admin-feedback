@@ -38,7 +38,7 @@
             <option value="published">Published</option>
             <option value="rejected">Rejected</option>
           </select>
-          <button class="af-btn af-btn--ghost" @click="loadReviews" :disabled="reviewsLoading">
+          <button class="af-btn af-btn--ghost" @click="loadReviews" :disabled="reviewsLoading" title="Refresh reviews" aria-label="Refresh reviews">
             <span v-html="ICONS.refresh" aria-hidden="true"></span>
           </button>
         </div>
@@ -1605,4 +1605,30 @@ export default {
   .af-root { padding: 24px 40px; }
 }
 @keyframes spread-perm-spin { to { transform: rotate(360deg); } }
+
+/* ── Dark mode ─────────────────────────────────────────────────────── */
+:global(html.dark) .af-root {
+  background: #000000;
+  color: #f5f0eb;
+  --spread-cream: #18181b;
+  --spread-border: rgba(230, 216, 202, 0.12);
+  --spread-text-primary: #f5f0eb;
+  --spread-text-secondary: rgba(230, 216, 202, 0.65);
+  --spread-text-muted: rgba(230, 216, 202, 0.4);
+}
+:global(html.dark) .af-card,
+:global(html.dark) .af-section { background: #18181b; border-color: rgba(230,216,202,0.12); }
+:global(html.dark) .af-heading { color: #f5f0eb; }
+:global(html.dark) .af-subheading { color: rgba(230,216,202,0.55); }
+:global(html.dark) .af-row-title { color: rgba(230,216,202,0.8); }
+:global(html.dark) .af-row-meta { color: rgba(230,216,202,0.45); }
+:global(html.dark) .af-row-body { color: rgba(230,216,202,0.65); }
+:global(html.dark) .af-divider { border-color: rgba(230,216,202,0.08); }
+:global(html.dark) .af-badge--positive { background: rgba(74,222,128,0.12); color: #4ade80; }
+:global(html.dark) .af-badge--negative { background: rgba(248,113,113,0.12); color: #f87171; }
+:global(html.dark) .af-badge--neutral { background: rgba(230,216,202,0.08); color: rgba(230,216,202,0.6); }
+:global(html.dark) .af-filter-btn { background: #27272a; border-color: rgba(230,216,202,0.15); color: rgba(230,216,202,0.6); }
+:global(html.dark) .af-filter-btn--active { background: #4b162d; border-color: #4b162d; color: #f5f0eb; }
+:global(html.dark) .af-empty { color: rgba(230,216,202,0.4); }
+:global(html.dark) .af-search { background: #160c11; border-color: rgba(230,216,202,0.2); color: #f5f0eb; }
 </style>
